@@ -1,0 +1,16 @@
+{
+  "output": "exemplo_saida.mp4",
+  "clips": [
+    {"src": "brutos/take1.mov", "in": 0.40, "out": 2.10},
+    {"src": "brutos/take1.mov", "in": 2.55, "out": 4.30},
+    {"src": "brutos/take2.mov", "in": 0.20, "out": 2.00}
+  ],
+  "captions": [
+    {"start": 0.00, "end": 0.55, "text": "Você acorda"},
+    {"start": 0.55, "end": 1.10, "text": "cansada,"},
+    {"start": 1.10, "end": 1.70, "text": "sem disposição"}
+  ],
+  "broll": [
+    {"src": "broll/mulher_cansada.mp4", "start": 0.00, "end": 3.40, "src_in": 0.0}
+  ]
+}

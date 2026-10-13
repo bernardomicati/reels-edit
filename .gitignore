@@ -1,0 +1,6 @@
+*.mp4
+*.mov
+*.MOV
+*.wav
+.captions.ass
+__pycache__/
