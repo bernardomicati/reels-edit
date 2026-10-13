@@ -1,16 +1,22 @@
 {
   "output": "exemplo_saida.mp4",
+  "ganchos": [
+    {"clips": [{"src": "brutos/bruto.mov", "in": 0.40, "out": 3.10}],
+     "captions": [{"start": 0.00, "end": 0.55, "text": "Você acorda"}, {"start": 0.55, "end": 1.10, "text": "cansada,"}],
+     "broll": [{"src": "broll/mulher_cansada.mp4", "start": 0.00, "end": 2.70}]},
+    {"clips": [{"src": "brutos/bruto.mov", "in": 3.50, "out": 6.00}],
+     "captions": [{"start": 0.00, "end": 0.60, "text": "Seu exame"}, {"start": 0.60, "end": 1.20, "text": "deu normal?"}],
+     "broll": [{"src": "broll/exame.mp4", "start": 0.00, "end": 2.50}]}
+  ],
   "clips": [
-    {"src": "brutos/take1.mov", "in": 0.40, "out": 2.10},
-    {"src": "brutos/take1.mov", "in": 2.55, "out": 4.30},
-    {"src": "brutos/take2.mov", "in": 0.20, "out": 2.00}
+    {"src": "brutos/bruto.mov", "in": 10.20, "out": 12.00},
+    {"src": "brutos/bruto.mov", "in": 12.40, "out": 14.30}
   ],
   "captions": [
-    {"start": 0.00, "end": 0.55, "text": "Você acorda"},
-    {"start": 0.55, "end": 1.10, "text": "cansada,"},
-    {"start": 1.10, "end": 1.70, "text": "sem disposição"}
+    {"start": 0.00, "end": 0.70, "text": "Essa é uma das frases"},
+    {"start": 0.70, "end": 1.40, "text": "que mais ouço"}
   ],
   "broll": [
-    {"src": "broll/mulher_cansada.mp4", "start": 0.00, "end": 3.40, "src_in": 0.0}
+    {"src": "broll/consultorio.mp4", "start": 1.80, "end": 3.70, "src_in": 0.0}
   ]
 }

@@ -2,18 +2,26 @@
 """Renderiza um reel vertical (1080x1920) a partir de um roteiro de edição em JSON.
 
 Estilo padrão = João Bueno (ver clientes/joao-bueno/ESTILO.md):
-  - talking head com jump cuts secos e punch-in alternado
-  - B-roll numa faixa no topo (~31% da altura) com borda inferior esfumada
-  - legenda pequena, branca, Montserrat Medium, 1-3 palavras, no peito
+  - talking head com jump cuts secos, SEM zoom
+  - SEMPRE abre com insert; B-roll numa faixa no topo (~31% da altura) com borda esfumada
+  - legenda pequena, branca, Montserrat Bold, 1-3 palavras, no peito
+  - 3 variações de gancho por vídeo (--gancho 1|2|3)
 
 Uso:
   python3 tools/reel.py roteiro.json            # renderiza
   python3 tools/reel.py roteiro.json --preview  # 540x960 rápido
+  python3 tools/reel.py roteiro.json --gancho 2 # usa o gancho 2 (padrão: 1)
+  python3 tools/reel.py roteiro.json --todos    # renderiza uma versão por gancho
 
-Formato do roteiro (tempos de "captions" e "broll" são na linha do tempo FINAL):
+Formato do roteiro. Tempos de "captions"/"broll" são relativos ao início do próprio bloco
+(o gancho começa em 0; o corpo também começa em 0 e é deslocado pela duração do gancho):
 {
   "output": "saida.mp4",
-  "clips":    [{"src": "bruto.mov", "in": 1.20, "out": 3.40, "zoom": 1.0}],
+  "ganchos": [
+    {"clips": [...], "captions": [...], "broll": [...]},   # gancho 1
+    {"clips": [...], "captions": [...], "broll": [...]}    # gancho 2 ...
+  ],
+  "clips":    [{"src": "bruto.mov", "in": 1.20, "out": 3.40}],
   "captions": [{"start": 0.0, "end": 0.6, "text": "Você acorda"}],
   "broll":    [{"src": "broll.mp4", "start": 0.0, "end": 3.0, "src_in": 0.0}],
   "music":    {"src": "trilha.mp3", "volume": 0.08}
@@ -35,12 +43,13 @@ STYLE = {
     "fps": 30,
     "broll_band": 0.31,      # fração da altura ocupada pelo B-roll no topo
     "broll_feather": 70,     # px de degradê na borda inferior do B-roll
-    "font": "Montserrat Medium",
+    "font": "Montserrat",
+    "bold": 1,
     "font_size": 64,
     "caption_y": 0.80,       # posição vertical da legenda (fração da altura)
     "outline": 1.2,
     "shadow": 1.5,
-    "zoom_alt": 1.12,        # punch-in usado em cortes alternados quando zoom não é dado
+    "zoom": 1.0,             # sem zoom (pedido do cliente); "zoom" por clip ainda funciona
     "lufs": -14,
 }
 
@@ -66,7 +75,7 @@ def write_ass(captions, path, st):
         "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
         "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
         f"Style: Default,{st['font']},{st['font_size']},&H00FFFFFF,&H00FFFFFF,&H64000000,&H78000000,"
-        f"0,0,0,0,100,100,0,0,1,{st['outline']},{st['shadow']},2,60,60,{margin_v},1",
+        f"{-1 if st['bold'] else 0},0,0,0,100,100,0,0,1,{st['outline']},{st['shadow']},2,60,60,{margin_v},1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -83,6 +92,32 @@ def esc(p):
     return p.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'").replace(",", "\\,")
 
 
+def assemble(spec, gancho):
+    """Junta gancho N + corpo numa linha do tempo única."""
+    ganchos = spec.get("ganchos") or []
+    blocks = []
+    if ganchos:
+        if not 1 <= gancho <= len(ganchos):
+            sys.exit(f"gancho {gancho} não existe (roteiro tem {len(ganchos)})")
+        blocks.append(ganchos[gancho - 1])
+    blocks.append(spec)
+    out = {"clips": [], "captions": [], "broll": []}
+    t0 = 0.0
+    for b in blocks:
+        out["clips"] += b.get("clips", [])
+        out["captions"] += [dict(c, start=c["start"] + t0, end=c["end"] + t0) for c in b.get("captions", [])]
+        out["broll"] += [dict(r, start=r["start"] + t0, end=r["end"] + t0) for r in b.get("broll", [])]
+        t0 += sum(c["out"] - c["in"] for c in b.get("clips", []))
+    if not any(r["start"] <= 0.001 for r in out["broll"]):
+        sys.exit("estilo João Bueno: o vídeo precisa ABRIR com um insert (broll com start=0)")
+    covered = sum(r["end"] - r["start"] for r in out["broll"])
+    print(f"duração {t0:.1f}s | inserts {len(out['broll'])} | cobertura B-roll {100 * covered / t0:.0f}%",
+          file=sys.stderr)
+    m = dict(spec, **out)
+    m.pop("ganchos", None)
+    return m
+
+
 def build(spec, base, preview=False):
     st = dict(STYLE)
     st.update(spec.get("style", {}))
@@ -95,7 +130,7 @@ def build(spec, base, preview=False):
     clips = spec["clips"]
     for i, c in enumerate(clips):
         inputs += ["-ss", str(c["in"]), "-t", f"{c['out'] - c['in']:.3f}", "-i", P(c["src"])]
-        z = c.get("zoom", 1.0 if i % 2 == 0 else st["zoom_alt"])
+        z = c.get("zoom", st["zoom"])
         sw, sh = int(W * z) // 2 * 2, int(H * z) // 2 * 2
         fc.append(
             f"[{i}:v]setpts=PTS-STARTPTS,fps={fps},"
@@ -161,17 +196,25 @@ def main():
     ap.add_argument("roteiro")
     ap.add_argument("--preview", action="store_true")
     ap.add_argument("--print", action="store_true", help="só imprime o comando ffmpeg")
+    ap.add_argument("--gancho", type=int, default=1)
+    ap.add_argument("--todos", action="store_true", help="uma versão por gancho")
     a = ap.parse_args()
     with open(a.roteiro, encoding="utf-8") as f:
         spec = json.load(f)
-    cmd, out = build(spec, os.path.dirname(os.path.abspath(a.roteiro)), a.preview)
-    if a.print:
-        print(" ".join(cmd))
-        return
-    r = subprocess.run(cmd)
-    if r.returncode:
-        sys.exit(r.returncode)
-    print(out)
+    n = len(spec.get("ganchos") or [None])
+    for g in range(1, n + 1) if a.todos else [a.gancho]:
+        s = assemble(spec, g)
+        if spec.get("ganchos"):
+            root, ext = os.path.splitext(s.get("output", "saida.mp4"))
+            s["output"] = f"{root}_gancho{g}{ext}"
+        cmd, out = build(s, os.path.dirname(os.path.abspath(a.roteiro)), a.preview)
+        if a.print:
+            print(" ".join(cmd))
+            continue
+        r = subprocess.run(cmd)
+        if r.returncode:
+            sys.exit(r.returncode)
+        print(out)
 
 
 if __name__ == "__main__":
